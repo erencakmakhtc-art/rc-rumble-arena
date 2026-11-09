@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#07101d">
+<title>RC Rumble — Arena</title>
+<style>
+  :root{color-scheme:dark;--cyan:#56e4ff;--orange:#ff8654;--panel:rgba(9,18,32,.84);--line:rgba(196,226,255,.16)}
+  *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#07101d;color:#f4f8ff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;user-select:none;-webkit-tap-highlight-color:transparent}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 48%,rgba(2,7,15,.48) 100%);z-index:1}
+  .glass{background:linear-gradient(145deg,rgba(17,31,49,.91),rgba(8,17,29,.82));border:1px solid var(--line);box-shadow:0 18px 60px rgba(0,0,0,.34),inset 0 1px rgba(255,255,255,.06);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  #hud{position:fixed;inset:0;z-index:3;pointer-events:none;display:none;padding:max(14px,env(safe-area-inset-top)) 18px max(15px,env(safe-area-inset-bottom))}
+  #hud.visible{display:block}
+  .hud-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .hud-card{border-radius:17px;padding:10px 15px;min-width:132px}
+  .eyebrow{font-size:9px;line-height:1.2;letter-spacing:1.6px;font-weight:900;color:#90a9c6;text-transform:uppercase}
+  .hud-value{font-size:20px;line-height:1.2;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+  .team-status{display:none;margin-top:4px;font-size:8px;font-weight:900;letter-spacing:1px;color:#86eaff}.team-status.visible{display:block}
+  #clockCard{text-align:center;min-width:120px}
+  #clockValue{font-size:25px;letter-spacing:1.5px}
+  #vehicleBadge{display:flex;align-items:center;gap:10px;min-width:145px}
+  #vehicleSwatch{width:12px;height:30px;border-radius:6px;background:var(--cyan);box-shadow:0 0 16px currentColor}
+  .hud-bottom{position:absolute;left:18px;right:18px;bottom:max(17px,env(safe-area-inset-bottom));display:flex;align-items:flex-end;justify-content:space-between}
+  .boost-card{width:min(250px,47vw);padding:12px 14px;border-radius:16px}
+  .meter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .meter-track{height:9px;background:rgba(255,255,255,.11);border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+  #boostFill{height:100%;width:100%;border-radius:inherit;background:linear-gradient(90deg,#20b9ed,#8bf7ff);box-shadow:0 0 16px #36c8f0;transition:width .08s linear}
+  #boostFill.low{background:linear-gradient(90deg,#ff824e,#ffd16e);box-shadow:0 0 14px #ff824e}
+  #controlsHint{font-size:10px;color:#a5b8ce;margin-top:8px;font-weight:700;letter-spacing:.4px}
+  .speed-card{min-width:112px;text-align:right;padding:9px 14px;border-radius:16px}
+  #speedValue{font-size:30px;line-height:1;font-weight:1000;font-variant-numeric:tabular-nums}
+  .speed-unit{font-size:9px;color:#8fa8c1;font-weight:900;letter-spacing:1.3px;margin-left:5px}
+  #warning{position:absolute;top:22%;left:50%;transform:translate(-50%,-10px);opacity:0;padding:10px 18px;border-radius:99px;background:rgba(191,57,48,.85);border:1px solid rgba(255,167,135,.55);font-size:12px;font-weight:1000;letter-spacing:1.5px;transition:.18s}
+  #warning.show{opacity:1;transform:translate(-50%,0)}
+  #eventBanner{position:fixed;z-index:5;top:34%;left:50%;transform:translate(-50%,-10px) scale(.94);opacity:0;pointer-events:none;text-align:center;padding:13px 21px;border-radius:18px;background:rgba(8,18,30,.9);border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 40px #0007;transition:.2s}
+  #eventBanner.show{opacity:1;transform:translate(-50%,0) scale(1)}
+  #eventTitle{font-size:15px;font-weight:1000;letter-spacing:1.6px}
+  #eventSub{font-size:11px;color:#a9bed4;margin-top:3px;font-weight:700}
+  .overlay{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;background:linear-gradient(180deg,rgba(3,9,17,.25),rgba(3,9,17,.7))}
+  .panel{width:min(880px,100%);border-radius:28px;padding:clamp(20px,4vw,34px)}
+  .brand-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+  .brand{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:1000;letter-spacing:2px;color:#bed0e5}
+  .brand-mark{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:linear-gradient(135deg,#53e6ff,#2773c8);color:#07101d;font-size:15px;box-shadow:0 0 22px #2acaf455}
+  .edition{font-size:9px;font-weight:900;color:#7f94ad;letter-spacing:1.4px}
+  h1{margin:0;color:#f7f9ff;font-size:clamp(36px,7vw,66px);line-height:.9;font-weight:1000;letter-spacing:-2.8px;text-transform:uppercase}
+  h1 span{color:var(--cyan);text-shadow:0 0 28px #3ecdeb66}
+  .intro{max-width:600px;color:#afc0d4;font-size:14px;line-height:1.55;margin:15px 0 21px}
+  .section-label{font-size:10px;font-weight:1000;letter-spacing:1.6px;color:#8ea5bf;text-transform:uppercase;margin-bottom:10px}
+  #modeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:17px}
+  .mode-card{padding:11px 13px;border-radius:14px;text-align:left;color:#f4f8ff;cursor:pointer;background:rgba(13,27,44,.78);border:1px solid rgba(183,212,243,.16);transition:border-color .15s,background .15s,transform .15s}
+  .mode-card:hover{transform:translateY(-2px)}.mode-card.selected{border-color:var(--cyan);background:linear-gradient(140deg,rgba(38,99,123,.48),rgba(12,28,45,.95));box-shadow:0 0 17px #37ccea24}
+  .mode-title{font-size:12px;font-weight:1000;letter-spacing:.7px}.mode-subtitle{font-size:9px;color:#91a8c1;margin-top:4px;font-weight:700}
+  #vehicleGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+  .vehicle-card{position:relative;min-height:178px;overflow:hidden;border-radius:19px;padding:14px 14px 13px;text-align:left;color:inherit;cursor:pointer;background:linear-gradient(145deg,rgba(28,47,68,.86),rgba(12,25,41,.84));border:1px solid rgba(183,212,243,.14);transition:transform .16s,border-color .16s,box-shadow .16s}
+  .vehicle-card:hover{transform:translateY(-3px)}
+  .vehicle-card.selected{border-color:var(--car-color);box-shadow:0 0 0 1px var(--car-color),0 0 28px color-mix(in srgb,var(--car-color) 22%,transparent);background:linear-gradient(145deg,rgba(31,57,77,.96),rgba(11,25,40,.94))}
+  .car-art{height:71px;display:flex;align-items:center;justify-content:center;margin:-3px 0 6px;filter:drop-shadow(0 8px 9px rgba(0,0,0,.28))}
+  .car-art svg{width:135px;height:75px;overflow:visible}
+  .car-name{font-size:16px;font-weight:1000;letter-spacing:.5px}
+  .car-tag{font-size:9px;font-weight:900;letter-spacing:1.2px;color:var(--car-color);text-transform:uppercase;margin-top:2px}
+  .car-stats{display:flex;gap:10px;margin-top:10px}
+  .stat{flex:1}.stat-label{font-size:8px;color:#8499b0;font-weight:900;letter-spacing:1px}.stat-track{height:4px;border-radius:8px;background:#fff2;margin-top:4px;overflow:hidden}.stat-fill{height:100%;background:var(--car-color);border-radius:8px}
+  .select-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px}
+  #selectionTip{font-size:11px;line-height:1.45;color:#94abc3;max-width:360px}
+  .primary-btn{border:0;border-radius:15px;padding:15px 23px;min-width:190px;background:linear-gradient(135deg,#53e4ff,#3aa8dc);color:#061421;font:inherit;font-size:13px;font-weight:1000;letter-spacing:1.1px;text-transform:uppercase;box-shadow:0 8px 24px #28bce844;cursor:pointer;transition:transform .12s,filter .12s}
+  .primary-btn:hover{transform:translateY(-2px);filter:brightness(1.07)}
+  .primary-btn:active{transform:translateY(1px)}
+  #resultPanel{text-align:center;width:min(480px,100%);border-radius:28px;padding:31px}
+  #resultIcon{width:66px;height:66px;border-radius:21px;margin:0 auto 16px;display:grid;place-items:center;color:#05131e;background:linear-gradient(135deg,#63eaff,#338ed8);font-size:30px;font-weight:1000;box-shadow:0 0 35px #2fb5e655}
+  #resultTitle{font-size:35px;line-height:1;font-weight:1000;letter-spacing:-1.3px}
+  #resultCopy{font-size:13px;line-height:1.55;color:#adc0d5;margin:10px 0 20px}
+  #resultStats{display:flex;justify-content:center;gap:10px;margin-bottom:10px}
+  .result-stat{min-width:100px;padding:10px 13px;border-radius:14px;background:#fff0;border:1px solid var(--line)}
+  .result-stat strong{display:block;font-size:18px}.result-stat span{display:block;font-size:8px;color:#92a8bf;font-weight:900;letter-spacing:1px;margin-top:3px}
+  #touchControls{position:fixed;z-index:4;inset:auto 0 0;display:none;justify-content:space-between;align-items:flex-end;padding:0 20px max(20px,env(safe-area-inset-bottom));pointer-events:none}
+  #touchControls.visible{display:none}
+  #stick{width:120px;height:120px;border-radius:50%;position:relative;pointer-events:auto;touch-action:none;background:radial-gradient(circle,rgba(197,226,255,.15),rgba(197,226,255,.06));border:1.5px solid rgba(214,237,255,.38);box-shadow:inset 0 0 25px #fff1,0 8px 24px #0003}
+  #stick:before,#stick:after{content:"";position:absolute;background:#d4e9ff18}#stick:before{width:1px;height:70%;left:50%;top:15%}#stick:after{height:1px;width:70%;left:15%;top:50%}
+  #thumb{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;transform:translate(-50%,-50%);background:linear-gradient(145deg,#effaff,#8fb2cf);border:2px solid #fff9;box-shadow:0 6px 17px #0006;pointer-events:none}
+  #boostButton{pointer-events:auto;width:82px;height:82px;border-radius:50%;border:1px solid #8af1ff99;background:radial-gradient(circle at 35% 28%,#94f5ff,#229bc8 75%);color:#061622;font-size:11px;font-weight:1000;letter-spacing:1px;box-shadow:0 0 24px #32c8ee66,0 8px 25px #0005;touch-action:none}
+  #boostButton #abilityIcon{display:block;font-size:21px;line-height:22px;margin-bottom:1px}#boostButton #abilityButtonLabel{display:block;font-size:10px;line-height:12px;margin:0}
+  @media(max-width:680px){
+    .overlay{align-items:flex-start;padding:max(14px,env(safe-area-inset-top)) 13px 14px}
+    .panel{padding:19px 15px;border-radius:24px;margin:auto 0}
+    .brand-row{margin-bottom:10px}.edition{font-size:8px}
+    h1{font-size:clamp(38px,12vw,55px)}.intro{font-size:12px;margin:11px 0 14px}
+    #modeGrid{gap:6px;margin-bottom:12px}.mode-card{padding:9px 7px}.mode-title{font-size:10px}.mode-subtitle{font-size:8px;line-height:1.25}
+    #vehicleGrid{grid-template-columns:1fr;gap:7px}
+    .vehicle-card{min-height:0;display:grid;grid-template-columns:75px 1fr;grid-template-rows:auto auto;column-gap:11px;padding:8px 11px;align-items:center}
+    .car-art{grid-row:1/4;height:54px;margin:0}.car-art svg{width:75px;height:52px}
+    .car-name{font-size:14px}.car-tag{font-size:8px}.car-stats{margin-top:5px;max-width:220px}
+    .select-footer{margin-top:12px;align-items:center}.primary-btn{min-width:142px;padding:13px 14px;font-size:11px}
+    #selectionTip{font-size:9px;max-width:48%}
+    .hud-card{min-width:100px;padding:8px 10px;border-radius:14px}.hud-value{font-size:17px}
+    #clockCard{min-width:92px}#clockValue{font-size:21px}.eyebrow{font-size:8px;letter-spacing:1.2px}
+    #vehicleBadge{min-width:0;gap:7px}#vehicleSwatch{height:26px}#hud{padding-left:10px;padding-right:10px}
+    .hud-bottom{left:12px;right:12px;bottom:148px}.boost-card{width:155px;padding:9px 10px}.hud-bottom .eyebrow{font-size:7px}#controlsHint{display:none}
+  }
+  @media(max-height:620px) and (orientation:landscape){
+    .overlay{padding:9px}.panel{padding:17px 23px;max-width:800px}.brand-row{margin-bottom:7px}h1{font-size:39px}.intro{margin:8px 0 10px;font-size:11px}
+    #modeGrid{margin-bottom:9px}.mode-card{padding:8px 10px}.vehicle-card{min-height:142px;padding:9px 12px}.car-art{height:52px}.car-art svg{height:56px}.car-stats{margin-top:6px}.select-footer{margin-top:10px}.primary-btn{padding:12px 19px}
+    #touchControls.visible{display:flex}#touchControls{padding-bottom:11px}#stick{width:91px;height:91px}#thumb{width:42px;height:42px}#boostButton{width:64px;height:64px}
+  }
+  @media(pointer:coarse){#touchControls.visible{display:flex}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas><div id="vignette"></div>
+
+<div id="hud">
+  <div class="hud-top">
+    <div class="hud-card glass"><div id="rivalLabel" class="eyebrow">RAKİPLER</div><div class="hud-value"><span id="rivalCount">2</span><span id="rivalTotal" style="font-size:12px;color:#839bb4"> / 2</span></div><div id="teamStatus" class="team-status">TAKIMIN <span id="teamCount">1</span> / <span id="teamTotal">1</span></div></div>
+    <div id="clockCard" class="hud-card glass"><div class="eyebrow">ARENA SÜRESİ</div><div id="clockValue" class="hud-value">01:30</div></div>
+    <div id="vehicleBadge" class="hud-card glass"><div id="vehicleSwatch"></div><div><div class="eyebrow">SÜRÜCÜ</div><div id="vehicleName" class="hud-value" style="font-size:14px">—</div></div></div>
+  </div>
+  <div id="warning">ARENA SINIRI!</div>
+  <div class="hud-bottom">
+    <div class="boost-card glass"><div class="meter-head"><span id="abilityName" class="eyebrow">ÖZEL YETENEK</span><span id="boostPercent" class="eyebrow">HAZIR</span></div><div class="meter-track"><div id="boostFill"></div></div><div id="controlsHint">WASD / OKLAR: SÜR&nbsp;&nbsp; • &nbsp;&nbsp;SPACE: YETENEK</div></div>
+    <div class="speed-card glass"><span id="speedValue">00</span><span class="speed-unit">KM/SA</span></div>
+  </div>
+</div>
+<div id="eventBanner"><div id="eventTitle">RAKİP ARENA DIŞINDA!</div><div id="eventSub">Bir rakip elendi</div></div>
+<div id="touchControls"><div id="stick"><div id="thumb"></div></div><button id="boostButton"><span id="abilityIcon">⚡</span><span id="abilityButtonLabel">YETENEK</span></button></div>
+
+<div class="overlay" id="selectOverlay">
+  <div class="panel glass">
+    <div class="brand-row"><div class="brand"><div class="brand-mark">R</div>RADYO KONTROLLÜ ARENA</div><div class="edition">ARENA SERIES&nbsp; / &nbsp;01</div></div>
+    <h1>RC <span>RUMBLE</span></h1>
+    <p class="intro">Rakip araçları çarpışma gücünle platformun dışına it. Aracını seç; tek başına ya da 2'ye 2 ve 3'e 3 takım savaşlarında mücadele et. Serbest modda son araç, takım savaşında son takım kazanır.</p>
+    <div class="section-label">OYUN MODU</div>
+    <div id="modeGrid">
+      <button class="mode-card selected" data-mode="ffa"><div class="mode-title">HERKES TEK</div><div class="mode-subtitle">3 araç · herkes rakip</div></button>
+      <button class="mode-card" data-mode="2v2"><div class="mode-title">2'YE 2</div><div class="mode-subtitle">Takım savaşı · 4 araç</div></button>
+      <button class="mode-card" data-mode="3v3"><div class="mode-title">3'E 3</div><div class="mode-subtitle">Takım savaşı · 6 araç</div></button>
+    </div>
+    <div class="section-label">ARACINI SEÇ</div>
+    <div id="vehicleGrid">
+      <button class="vehicle-card selected" data-type="sprinter" style="--car-color:#5ce7ff">
+        <div class="car-art"><svg viewBox="0 0 180 90" aria-hidden="true"><ellipse cx="91" cy="76" rx="67" ry="7" fill="#06101b" opacity=".55"/><path d="M28 35 48 27 64 13 119 13 137 31 155 37 160 62 151 68 29 68 20 59Z" fill="#38c8e8" stroke="#bcf7ff" stroke-width="2"/><path d="m65 18 15-1v17H48Zm22-1h29l13 17H87Z" fill="#b7f5ff" opacity=".86"/><path d="M26 44h130v9H26Z" fill="#132c42"/><path d="M37 40h12v5H37Zm102 0h12v5h-12Z" fill="#f4fcff"/><rect x="25" y="55" width="18" height="23" rx="7" fill="#101820"/><rect x="134" y="55" width="18" height="23" rx="7" fill="#101820"/><circle cx="34" cy="66" r="5" fill="#98cde0"/><circle cx="143" cy="66" r="5" fill="#98cde0"/><path d="m51 58 76 0" stroke="#e8fbff" stroke-width="3" opacity=".7"/></svg></div>
+        <div class="car-name">SPRINTER</div><div class="car-tag">HIZLI &nbsp;·&nbsp; HAFİF &nbsp;·&nbsp; ZIPLA</div>
+        <div class="car-stats"><div class="stat"><div class="stat-label">HIZ</div><div class="stat-track"><div class="stat-fill" style="width:96%"></div></div></div><div class="stat"><div class="stat-label">ÇARPIŞMA</div><div class="stat-track"><div class="stat-fill" style="width:58%"></div></div></div></div>
+      </button>
+      <button class="vehicle-card" data-type="bulldog" style="--car-color:#ff9a58">
+        <div class="car-art"><svg viewBox="0 0 180 90" aria-hidden="true"><ellipse cx="91" cy="76" rx="68" ry="7" fill="#06101b" opacity=".55"/><path d="M23 35 44 29 52 18 129 18 143 30 159 36 163 64 153 71 25 71 17 63Z" fill="#e7773c" stroke="#ffd1a2" stroke-width="2"/><path d="M56 22h30v15H46Zm37 0h32l10 15H93Z" fill="#c7eaf1" opacity=".83"/><path d="M21 43h140v12H21Z" fill="#442b27"/><path d="M29 36h18v8H29Zm113 0h18v8h-18Z" fill="#fff2d2"/><rect x="23" y="54" width="21" height="26" rx="7" fill="#17191b"/><rect x="137" y="54" width="21" height="26" rx="7" fill="#17191b"/><circle cx="34" cy="68" r="6" fill="#b6c3cb"/><circle cx="147" cy="68" r="6" fill="#b6c3cb"/><path d="M51 55h77v11H51Z" fill="#a9472d"/></svg></div>
+        <div class="car-name">BULLDOG</div><div class="car-tag">AĞIR &nbsp;·&nbsp; GÜÇLÜ &nbsp;·&nbsp; ŞOK</div>
+        <div class="car-stats"><div class="stat"><div class="stat-label">HIZ</div><div class="stat-track"><div class="stat-fill" style="width:59%"></div></div></div><div class="stat"><div class="stat-label">ÇARPIŞMA</div><div class="stat-track"><div class="stat-fill" style="width:97%"></div></div></div></div>
+      </button>
+      <button class="vehicle-card" data-type="rally" style="--car-color:#b48bff">
+        <div class="car-art"><svg viewBox="0 0 180 90" aria-hidden="true"><ellipse cx="91" cy="76" rx="67" ry="7" fill="#06101b" opacity=".55"/><path d="M27 37 45 30 60 17 119 17 137 32 155 38 160 63 151 69 28 69 20 62Z" fill="#8561da" stroke="#dfd0ff" stroke-width="2"/><path d="m62 22 20-1v15H49Zm25-1h29l13 15H87Z" fill="#c4e9f5" opacity=".86"/><path d="M25 44h132v9H25Z" fill="#24213d"/><path d="M29 38h14v6H29Zm111 0h15v6h-15Z" fill="#f8f2ff"/><rect x="24" y="55" width="19" height="23" rx="7" fill="#151722"/><rect x="135" y="55" width="19" height="23" rx="7" fill="#151722"/><circle cx="34" cy="67" r="5" fill="#bec9e0"/><circle cx="144" cy="67" r="5" fill="#bec9e0"/><path d="m52 57 74 0" stroke="#daccff" stroke-width="3"/><path d="M53 29h10m65 0h10" stroke="#ffdc78" stroke-width="3"/></svg></div>
+        <div class="car-name">RALLY</div><div class="car-tag">DENGELİ &nbsp;·&nbsp; TURBO</div>
+        <div class="car-stats"><div class="stat"><div class="stat-label">HIZ</div><div class="stat-track"><div class="stat-fill" style="width:79%"></div></div></div><div class="stat"><div class="stat-label">ÇARPIŞMA</div><div class="stat-track"><div class="stat-fill" style="width:78%"></div></div></div></div>
+      </button>
+    </div>
+    <div class="select-footer"><div id="selectionTip">Sol çubukla yön ver. Turbo ile hızlanıp doğru açıdan çarp.</div><button class="primary-btn" id="startButton">ARENA'YA GİR&nbsp; →</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="resultOverlay" style="display:none">
+  <div id="resultPanel" class="panel glass">
+    <div id="resultIcon">★</div><div id="resultTitle">ARENA ŞAMPİYONU!</div><div id="resultCopy"></div>
+    <div id="resultStats"><div class="result-stat"><strong id="resultKnockouts">0</strong><span>RAKİP ELENDİ</span></div><div class="result-stat"><strong id="resultTime">00:00</strong><span>ARENADA KALDIN</span></div></div>
+    <button class="primary-btn" id="againButton">YENİDEN OYNA&nbsp; ↻</button>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const VEHICLES = {
+  sprinter:{name:'SPRINTER',color:0x42d7f3,mass:0.82,maxSpeed:16.5,accel:17.5,turn:2.55,grip:6.8,ram:0.98,ability:'jump',abilityName:'ZIPLAMA',abilityCooldown:10},
+  bulldog:{name:'BULLDOG',color:0xf18448,mass:1.72,maxSpeed:11.6,accel:11.5,turn:1.75,grip:4.4,ram:1.34,ability:'shockwave',abilityName:'ŞOK VURUŞU',abilityCooldown:10},
+  rally:{name:'RALLY',color:0x9c75f4,mass:1.12,maxSpeed:13.9,accel:14.2,turn:2.35,grip:6.0,ram:1.12,ability:'turbo',abilityName:'TURBO',abilityCooldown:10,turboDuration:2.5,turboMultiplier:1.23}
+};
+const MODES={ffa:{teamSize:1},'2v2':{teamSize:2},'3v3':{teamSize:3}};
+const ARENA_RADIUS=22.5, CAR_RADIUS=1.27, ELIMINATION_MARGIN=1.55, ROUND_SECONDS=90, SHRINK_START_SECONDS=25, FINAL_ARENA_RADIUS=13.5;
+let activeArenaRadius=ARENA_RADIUS,shrinkStarted=false,shrinkRing=null,platformFloor=null,platformBase=null,arenaMarkings=null,arenaRim=null,arenaRimTop=null,arenaUnderglow=null,crowdGroup=null,audienceFlashTimer=2,audienceFlashes=[];
+const canvas=document.getElementById('game');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.65));
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.14;
+
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x162536); scene.fog=new THREE.Fog(0x162536,62,140);
+const camera=new THREE.PerspectiveCamera(window.innerHeight>window.innerWidth?65:54,window.innerWidth/window.innerHeight,.1,250);
+scene.add(new THREE.HemisphereLight(0xc6e6ff,0x26364a,2.5));
+const keyLight=new THREE.DirectionalLight(0xfff4df,4.0); keyLight.position.set(-18,36,14); keyLight.castShadow=true;
+keyLight.shadow.mapSize.set(2048,2048); keyLight.shadow.camera.left=-35;keyLight.shadow.camera.right=35;keyLight.shadow.camera.top=35;keyLight.shadow.camera.bottom=-35;keyLight.shadow.camera.updateProjectionMatrix();keyLight.shadow.bias=-.0004;scene.add(keyLight);
+const cyanLight=new THREE.PointLight(0x37cfff,70,75,2);cyanLight.position.set(-13,9,-11);scene.add(cyanLight);
+const pinkLight=new THREE.PointLight(0xf45b9b,64,75,2);pinkLight.position.set(14,8,11);scene.add(pinkLight);
+
+const mat=(color,roughness=.5,metalness=.08,extra={})=>new THREE.MeshStandardMaterial({color,roughness,metalness,...extra});
+function addArena(){
+  platformFloor=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS,128),mat(0x526477,.78,.1));platformFloor.rotation.x=-Math.PI/2;platformFloor.position.y=-.04;platformFloor.receiveShadow=true;scene.add(platformFloor);
+  platformBase=new THREE.Mesh(new THREE.CylinderGeometry(ARENA_RADIUS,ARENA_RADIUS+.2,.8,128),mat(0x26374a,.58,.3));platformBase.position.y=-.47;platformBase.castShadow=true;platformBase.receiveShadow=true;scene.add(platformBase);
+  arenaMarkings=new THREE.Group();scene.add(arenaMarkings);
+  const inner=new THREE.Mesh(new THREE.RingGeometry(ARENA_RADIUS-.45,ARENA_RADIUS-.18,128),new THREE.MeshBasicMaterial({color:0x7ce9ff,transparent:true,opacity:.9,side:THREE.DoubleSide}));inner.rotation.x=-Math.PI/2;inner.position.y=.012;arenaMarkings.add(inner);
+  shrinkRing=new THREE.Mesh(new THREE.RingGeometry(.991,1.009,160),new THREE.MeshBasicMaterial({color:0x54ddff,transparent:true,opacity:.32,side:THREE.DoubleSide,depthWrite:false}));shrinkRing.rotation.x=-Math.PI/2;shrinkRing.position.y=.034;shrinkRing.scale.setScalar(ARENA_RADIUS);scene.add(shrinkRing);
+  const line=new THREE.Mesh(new THREE.RingGeometry(18.7,18.9,128),new THREE.MeshBasicMaterial({color:0xf5f6ed,transparent:true,opacity:.84,side:THREE.DoubleSide}));line.rotation.x=-Math.PI/2;line.position.y=.013;arenaMarkings.add(line);
+  for(const r of [5.5,10.5,15.5]){const ring=new THREE.Mesh(new THREE.RingGeometry(r-.018,r+.018,128),new THREE.MeshBasicMaterial({color:0xb7d3e5,transparent:true,opacity:.2,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.006;arenaMarkings.add(ring);}
+  const tickMat=new THREE.MeshBasicMaterial({color:0xffcc72,transparent:true,opacity:.72});
+  for(let i=0;i<48;i++){
+    const a=i*Math.PI*2/48,r=20.4,len=i%4===0?.88:.36;
+    const tick=new THREE.Mesh(new THREE.BoxGeometry(i%4===0?.075:.045,.018,len),tickMat);
+    tick.position.set(Math.sin(a)*r,.025,Math.cos(a)*r);tick.rotation.y=a;arenaMarkings.add(tick);
+  }
+  arenaRim=new THREE.Mesh(new THREE.CylinderGeometry(ARENA_RADIUS+.12,ARENA_RADIUS+.12,.3,160,1,true),mat(0x687e91,.58,.16));arenaRim.position.y=.11;arenaRim.castShadow=true;arenaRim.receiveShadow=true;scene.add(arenaRim);
+  arenaRimTop=new THREE.Mesh(new THREE.RingGeometry(ARENA_RADIUS-.04,ARENA_RADIUS+.15,160),mat(0x8093a3,.62,.12));arenaRimTop.rotation.x=-Math.PI/2;arenaRimTop.position.y=.26;arenaRimTop.receiveShadow=true;scene.add(arenaRimTop);
+  arenaUnderglow=new THREE.Mesh(new THREE.TorusGeometry(ARENA_RADIUS+.65,.055,8,144),new THREE.MeshBasicMaterial({color:0x36cbed,transparent:true,opacity:.92}));arenaUnderglow.rotation.x=Math.PI/2;arenaUnderglow.position.y=-.42;scene.add(arenaUnderglow);
+  crowdGroup=new THREE.Group();scene.add(crowdGroup);
+  const peoplePerTier=160,tierCount=10,peopleCount=peoplePerTier*tierCount;
+  const bodyGeo=new THREE.CylinderGeometry(.17,.22,.78,5),headGeo=new THREE.SphereGeometry(.18,7,5);
+  const crowdMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.88}),skinMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.9});
+  const bodies=new THREE.InstancedMesh(bodyGeo,crowdMat,peopleCount),heads=new THREE.InstancedMesh(headGeo,skinMat,peopleCount),dummy=new THREE.Object3D();
+  const clothes=[0x36b7db,0xf27651,0xe5bb58,0x5985d4,0x9c75d8,0x64b786,0xd3e1ec].map(c=>new THREE.Color(c));
+  const skin=[0xf0c7a1,0xc98e68,0xe2ad82,0x8f6049].map(c=>new THREE.Color(c));
+  let person=0;
+  const entranceAngles=[0,Math.PI/2,Math.PI,Math.PI*1.5];
+  for(let tier=0;tier<tierCount;tier++){
+    const stand=new THREE.Mesh(new THREE.TorusGeometry(ARENA_RADIUS+4.55+tier*.72,.4,8,160),mat(tier%2===0?0x52677c:0x40556a,.72,.12));stand.rotation.x=Math.PI/2;stand.position.y=.18+tier*.72;crowdGroup.add(stand);
+    const radius=ARENA_RADIUS+5.15+tier*.72,baseY=.28+tier*.72;
+    for(let i=0;i<peoplePerTier;i++){
+      const angle=(i/peoplePerTier)*Math.PI*2+(tier%2)*.012+(Math.random()-.5)*.008;
+      if(entranceAngles.some(g=>Math.abs(Math.atan2(Math.sin(angle-g),Math.cos(angle-g)))<.075))continue;
+      const x=Math.sin(angle)*radius,z=Math.cos(angle)*radius;
+      dummy.position.set(x,baseY+.4,z);dummy.rotation.set(0,angle,0);dummy.scale.set(1,.9+Math.random()*.2,1);dummy.updateMatrix();bodies.setMatrixAt(person,dummy.matrix);bodies.setColorAt(person,clothes[(i*3+tier*2)%clothes.length]);
+      dummy.position.set(x,baseY+.91,z);dummy.scale.setScalar(.9+Math.random()*.2);dummy.updateMatrix();heads.setMatrixAt(person,dummy.matrix);heads.setColorAt(person,skin[(i+tier)%skin.length]);person++;
+    }
+  }
+  bodies.count=person;heads.count=person;bodies.instanceMatrix.needsUpdate=true;heads.instanceMatrix.needsUpdate=true;bodies.instanceColor.needsUpdate=true;heads.instanceColor.needsUpdate=true;bodies.castShadow=false;heads.castShadow=false;crowdGroup.add(bodies,heads);
+  for(const angle of entranceAngles){
+    for(let tier=0;tier<tierCount;tier++){
+      const radius=ARENA_RADIUS+4.85+tier*.72,step=new THREE.Mesh(new THREE.BoxGeometry(4.35,.12,.78),mat(tier%2===0?0x78899a:0x63778a,.8,.06));
+      step.position.set(Math.sin(angle)*radius,.05+tier*.72,Math.cos(angle)*radius);step.rotation.y=angle;crowdGroup.add(step);
+    }
+  }
+  audienceFlashes=[];
+  for(let i=0;i<5;i++){
+    const angle=i*Math.PI*2/5+.27,tier=2+(i%6),radius=ARENA_RADIUS+5.15+tier*.72,y=.28+tier*.72+.95;
+    const light=new THREE.PointLight(0xffffff,0,48,2),bulb=new THREE.Mesh(new THREE.SphereGeometry(.12,7,5),new THREE.MeshBasicMaterial({color:0x344457}));
+    light.position.set(Math.sin(angle)*radius,y,Math.cos(angle)*radius);bulb.position.copy(light.position);crowdGroup.add(light,bulb);audienceFlashes.push({light,bulb,remaining:0});
+  }
+  const outside=new THREE.Mesh(new THREE.CircleGeometry(130,96),mat(0x25364a,.92,0));outside.rotation.x=-Math.PI/2;outside.position.y=-1.1;outside.receiveShadow=true;scene.add(outside);
+  const starsGeo=new THREE.BufferGeometry(),points=[];
+  for(let i=0;i<460;i++){const theta=Math.random()*Math.PI*2,rad=35+Math.random()*76,y=3+Math.random()*45;points.push(Math.cos(theta)*rad,y,Math.sin(theta)*rad);}
+  starsGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));scene.add(new THREE.Points(starsGeo,new THREE.PointsMaterial({color:0x9dbad2,size:.12,transparent:true,opacity:.55,sizeAttenuation:true})));
+  for(let i=0;i<4;i++){
+    const angle=i*Math.PI/2+Math.PI/4,spot=new THREE.SpotLight(0xffefda,115,58,.62,.55,1.2);
+    spot.position.set(Math.sin(angle)*(ARENA_RADIUS+9),21,Math.cos(angle)*(ARENA_RADIUS+9));spot.target.position.set(0,0,0);scene.add(spot,spot.target);
+  }
+}
+addArena();
+function updateArenaShrink(){
+  const progress=THREE.MathUtils.clamp((elapsed-SHRINK_START_SECONDS)/(ROUND_SECONDS-SHRINK_START_SECONDS),0,1);
+  activeArenaRadius=THREE.MathUtils.lerp(ARENA_RADIUS,FINAL_ARENA_RADIUS,progress);
+  const scale=activeArenaRadius/ARENA_RADIUS;
+  if(platformFloor)platformFloor.scale.set(scale,scale,1);
+  if(platformBase)platformBase.scale.set(scale,1,scale);
+  if(arenaMarkings)arenaMarkings.scale.set(scale,1,scale);
+  if(arenaRim)arenaRim.scale.set(scale,1,scale);
+  if(arenaRimTop)arenaRimTop.scale.set(scale,scale,1);
+  if(arenaUnderglow)arenaUnderglow.scale.set(scale,scale,1);
+  if(crowdGroup)crowdGroup.scale.set(scale,1,scale);
+  if(shrinkRing){shrinkRing.scale.set(activeArenaRadius,activeArenaRadius,1);shrinkRing.material.color.setHSL(.53-.52*progress,.94,.62);shrinkRing.material.opacity=.32+.42*progress;}
+  if(progress>0&&!shrinkStarted){shrinkStarted=true;showEvent('ARENA DARALIYOR','Dış çizgi içeri doğru ilerliyor!','#ff9c65');}
+}
+function updateAudienceFlashes(dt){
+  audienceFlashTimer-=dt;
+  if(audienceFlashTimer<=0&&audienceFlashes.length){const flash=audienceFlashes[Math.floor(Math.random()*audienceFlashes.length)];flash.remaining=.12;audienceFlashTimer=2.5+Math.random()*7.5;}
+  for(const flash of audienceFlashes){
+    if(flash.remaining>0){flash.remaining=Math.max(0,flash.remaining-dt);const phase=1-flash.remaining/.12;flash.light.intensity=260*Math.sin(Math.PI*phase);flash.bulb.material.color.setHex(0xffffff);}
+    else{flash.light.intensity=0;flash.bulb.material.color.setHex(0x344457);}
+  }
+}
+
+const wheelGeo=new THREE.CylinderGeometry(.43,.43,.32,20,1);
+wheelGeo.rotateZ(Math.PI/2);
+const wheelMat=mat(0x111720,.84,.03),hubMat=mat(0xa9c6d8,.36,.55);
+function buildCar(type,accentOverride){
+  const spec=VEHICLES[type],color=accentOverride??spec.color,g=new THREE.Group();
+  const bodyMat=mat(color,.32,.28),darkMat=mat(0x192737,.42,.28),glassMat=mat(0xa8eaff,.18,.35,{transparent:true,opacity:.78,metalness:.2});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(type==='bulldog'?2.0:1.82,.63,type==='bulldog'?3.0:2.72),bodyMat);body.position.y=.83;body.castShadow=true;body.receiveShadow=true;g.add(body);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(type==='bulldog'?1.42:1.34,.44,type==='sprinter'?.96:1.08),glassMat);cabin.position.set(0,1.33,-.06);cabin.castShadow=true;g.add(cabin);
+  const hood=new THREE.Mesh(new THREE.BoxGeometry(type==='bulldog'?1.83:1.7,.15,.7),mat(color,.28,.32,{emissive:color,emissiveIntensity:.09}));hood.position.set(0,1.1,.79);g.add(hood);
+  const frontBar=new THREE.Mesh(new THREE.BoxGeometry(2.06,.22,.24),darkMat);frontBar.position.set(0,.55,1.42);frontBar.castShadow=true;g.add(frontBar);
+  const rearBar=new THREE.Mesh(new THREE.BoxGeometry(2.06,.21,.24),darkMat);rearBar.position.set(0,.55,-1.42);g.add(rearBar);
+  const topStripe=new THREE.Mesh(new THREE.BoxGeometry(.22,.018,1.22),new THREE.MeshBasicMaterial({color:0xf2f7ff,transparent:true,opacity:.72}));topStripe.position.set(0,1.42,.14);g.add(topStripe);
+  const wheels=[];
+  for(const x of [-.98,.98])for(const z of [-.88,.9]){
+    const tire=new THREE.Mesh(wheelGeo,wheelMat);tire.position.set(x,.5,z);tire.castShadow=true;g.add(tire);wheels.push(tire);
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.21,.21,.34,16),hubMat);hub.rotation.z=Math.PI/2;hub.position.copy(tire.position);g.add(hub);
+  }
+  const headMat=new THREE.MeshBasicMaterial({color:0xe8faff});
+  for(const x of [-.58,.58]){const lamp=new THREE.Mesh(new THREE.BoxGeometry(.32,.13,.045),headMat);lamp.position.set(x,.91,1.38);g.add(lamp);}
+  const tailMat=new THREE.MeshBasicMaterial({color:0xff534f});
+  for(const x of [-.58,.58]){const light=new THREE.Mesh(new THREE.BoxGeometry(.3,.12,.04),tailMat);light.position.set(x,.9,-1.38);g.add(light);}
+  const antenna=new THREE.Mesh(new THREE.CylinderGeometry(.022,.04,.65,6),darkMat);antenna.position.set(.48,1.75,-.65);g.add(antenna);
+  const tip=new THREE.Mesh(new THREE.SphereGeometry(.085,10,8),new THREE.MeshBasicMaterial({color}));tip.position.set(.48,2.08,-.65);g.add(tip);
+  if(type==='bulldog'){
+    const guard=new THREE.Mesh(new THREE.BoxGeometry(1.55,.16,.25),mat(0xffb168,.35,.42));guard.position.set(0,1.62,-.68);g.add(guard);
+    const brace=new THREE.Mesh(new THREE.BoxGeometry(1.92,.14,.2),mat(0x3a2724,.42,.35));brace.position.set(0,.42,1.48);g.add(brace);
+  }else if(type==='sprinter'){
+    const spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.25,.1,.26),bodyMat);spoiler.position.set(0,1.52,-1.08);g.add(spoiler);
+    for(const x of [-.48,.48]){const support=new THREE.Mesh(new THREE.BoxGeometry(.09,.28,.1),darkMat);support.position.set(x,1.39,-1.04);g.add(support);}
+  }else{
+    const rack=new THREE.Mesh(new THREE.BoxGeometry(1.22,.09,.36),mat(0xd8cbff,.32,.45));rack.position.set(0,1.62,-.52);g.add(rack);
+  }
+  const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.52,24),new THREE.MeshBasicMaterial({color:0x02060c,transparent:true,opacity:.36,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.025;g.add(shadow);
+  g.userData={type,spec,wheels,bodyMat,baseColor:color};return g;
+}
+
+const cars=[],sparks=[],shockwaves=[],selectedCards=[...document.querySelectorAll('.vehicle-card')],modeCards=[...document.querySelectorAll('.mode-card')];
+let selectedType='sprinter',selectedMode='ffa',teamBattle=false,gameState='menu',player=null,roundLeft=ROUND_SECONDS,elapsed=0,knockouts=0,abilityHeld=false,abilityPressed=false,eventTimer=0,audio=null;
+const keys={};
+const ui={hud:document.getElementById('hud'),clock:document.getElementById('clockValue'),rivals:document.getElementById('rivalCount'),rivalTotal:document.getElementById('rivalTotal'),rivalLabel:document.getElementById('rivalLabel'),teamStatus:document.getElementById('teamStatus'),teamCount:document.getElementById('teamCount'),teamTotal:document.getElementById('teamTotal'),name:document.getElementById('vehicleName'),swatch:document.getElementById('vehicleSwatch'),boost:document.getElementById('boostFill'),boostPct:document.getElementById('boostPercent'),abilityName:document.getElementById('abilityName'),abilityIcon:document.getElementById('abilityIcon'),abilityButtonLabel:document.getElementById('abilityButtonLabel'),controlsHint:document.getElementById('controlsHint'),warning:document.getElementById('warning'),event:document.getElementById('eventBanner')};
+
+function makeCar(type,role,team,angle,radius,heading){
+  const spec=VEHICLES[type],mesh=buildCar(type),x=Math.sin(angle)*radius,z=Math.cos(angle)*radius;
+  if(teamBattle){const marker=new THREE.Mesh(new THREE.TorusGeometry(.3,.065,8,20),new THREE.MeshBasicMaterial({color:team===0?0x4fe5ff:0xff965d}));marker.rotation.x=Math.PI/2;marker.position.y=2.38;mesh.add(marker);}
+  mesh.position.set(x,-.07,z);mesh.rotation.y=heading??(role==='player'?Math.PI/2:Math.atan2(-x,-z));scene.add(mesh);
+  const car={type,spec,role,team,mesh,x,z,vx:0,vz:0,yaw:mesh.rotation.y,angular:0,specialCooldown:0,turboTime:0,jumpHeight:0,jumpVelocity:0,falling:false,fallTime:0,eliminated:false,warning:false,collisionFlash:0,decision:0,aiTarget:null,aiBehavior:'attack',aiPatrol:{x:0,z:0},aiSide:Math.random()<.5?-1:1,impactPower:0};cars.push(car);return car;
+}
+const previewCars=[makePreview('sprinter',-7.4),makePreview('bulldog',0),makePreview('rally',7.4)];
+function makePreview(type,x){const mesh=buildCar(type);mesh.position.set(x,-.07,1.4);mesh.rotation.y=-.32;mesh.scale.setScalar(.94);scene.add(mesh);return mesh;}
+function selectVehicle(type){
+  selectedType=type;for(const card of selectedCards)card.classList.toggle('selected',card.dataset.type===type);
+  for(const preview of previewCars){const match=preview.userData.type===type;preview.scale.setScalar(match?1.07:.88);preview.position.y=match?-.01:-.08;}
+  const c=VEHICLES[type];document.getElementById('selectionTip').textContent=`${c.name}: ${Math.round(c.maxSpeed*3.6)} km/sa • ${c.abilityName}, 10 sn bekleme`;
+}
+selectedCards.forEach(card=>card.addEventListener('click',()=>selectVehicle(card.dataset.type)));
+function selectMode(mode){
+  if(!MODES[mode])return;selectedMode=mode;
+  for(const card of modeCards)card.classList.toggle('selected',card.dataset.mode===mode);
+}
+modeCards.forEach(card=>card.addEventListener('click',()=>selectMode(card.dataset.mode)));
+
+function startRound(){
+  if(gameState==='playing')return;
+  for(const preview of previewCars)scene.remove(preview);
+  for(const c of cars)scene.remove(c.mesh);cars.length=0;sparks.forEach(s=>scene.remove(s.mesh));sparks.length=0;
+  for(const w of shockwaves){scene.remove(w.mesh);w.mesh.geometry.dispose();w.mesh.material.dispose();}shockwaves.length=0;
+  roundLeft=ROUND_SECONDS;elapsed=0;knockouts=0;abilityHeld=false;abilityPressed=false;shrinkStarted=false;activeArenaRadius=ARENA_RADIUS;teamBattle=selectedMode!=='ffa';updateArenaShrink();
+  if(!teamBattle){
+    player=makeCar(selectedType,'player',0,0,0,Math.PI/2);
+    const rivals=Object.keys(VEHICLES).filter(t=>t!==selectedType);
+    makeCar(rivals[0],'ai',1,Math.PI*.20,13.5);makeCar(rivals[1],'ai',2,Math.PI*1.20,13.5);
+  }else{
+    const teamSize=MODES[selectedMode].teamSize,types=Object.keys(VEHICLES),selectedIndex=types.indexOf(selectedType);
+    const homeRoster=Array.from({length:teamSize},(_,i)=>types[(selectedIndex+i)%types.length]);
+    const awayRoster=teamSize===2?[homeRoster[1],homeRoster[0]]:[homeRoster[2],homeRoster[0],homeRoster[1]];
+    const slots=teamSize===2?[-.17,.17]:[-.28,0,.28],radius=teamSize===2?8.4:9.1;
+    for(let i=0;i<teamSize;i++){
+      const car=makeCar(homeRoster[i],i===0?'player':'ally',0,slots[i],radius,Math.PI);
+      if(i===0)player=car;
+    }
+    for(let i=0;i<teamSize;i++)makeCar(awayRoster[i],'ai',1,Math.PI+slots[i],radius,0);
+  }
+  gameState='playing';document.getElementById('selectOverlay').style.display='none';document.getElementById('resultOverlay').style.display='none';
+  ui.hud.classList.add('visible');document.getElementById('touchControls').classList.add('visible');
+  ui.rivalLabel.textContent=teamBattle?'KARŞI TAKIM':'RAKİPLER';ui.rivalTotal.textContent=` / ${teamBattle?MODES[selectedMode].teamSize:2}`;
+  ui.teamStatus.classList.toggle('visible',teamBattle);ui.teamTotal.textContent=teamBattle?MODES[selectedMode].teamSize:1;
+  ui.name.textContent=VEHICLES[selectedType].name;ui.swatch.style.background=`#${VEHICLES[selectedType].color.toString(16).padStart(6,'0')}`;
+  const spec=VEHICLES[selectedType],buttonLabels={jump:'ZIPLA',shockwave:'ŞOK',turbo:'TURBO'},buttonIcons={jump:'↟',shockwave:'✹',turbo:'⚡'};
+  ui.abilityName.textContent=spec.abilityName;ui.abilityButtonLabel.textContent=buttonLabels[spec.ability];ui.abilityIcon.textContent=buttonIcons[spec.ability];ui.controlsHint.textContent=`WASD / OKLAR: SÜR  •  SPACE: ${buttonLabels[spec.ability]} (10 SN'DE BİR)`;
+  const abilityColor={jump:'#5ce7ff',shockwave:'#ff9a58',turbo:'#b48bff'}[spec.ability],abilityButton=document.getElementById('boostButton');
+  abilityButton.style.borderColor=`${abilityColor}bb`;abilityButton.style.background=`radial-gradient(circle at 35% 28%,${abilityColor}dd,${abilityColor} 75%)`;abilityButton.style.boxShadow=`0 0 24px ${abilityColor}66,0 8px 25px #0005`;
+  updateHud();playTone(520,.08,'sine',.05);setTimeout(()=>playTone(780,.14,'sine',.045),100);
+}
+document.getElementById('startButton').addEventListener('click',startRound);
+document.getElementById('againButton').addEventListener('click',()=>{gameState='menu';for(const c of cars)scene.remove(c.mesh);cars.length=0;ui.hud.classList.remove('visible');document.getElementById('touchControls').classList.remove('visible');document.getElementById('resultOverlay').style.display='none';document.getElementById('selectOverlay').style.display='flex';previewCars.forEach(p=>scene.add(p));selectVehicle(selectedType);});
+
+function playTone(freq,duration,type='sine',volume=.04){
+  try{audio??=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();const o=audio.createOscillator(),g=audio.createGain(),now=audio.currentTime;o.type=type;o.frequency.setValueAtTime(freq,now);g.gain.setValueAtTime(volume,now);g.gain.exponentialRampToValueAtTime(.001,now+duration);o.connect(g);g.connect(audio.destination);o.start(now);o.stop(now+duration);}catch(_){ }
+}
+function showEvent(title,sub,color='#ffffff'){
+  document.getElementById('eventTitle').textContent=title;document.getElementById('eventTitle').style.color=color;document.getElementById('eventSub').textContent=sub;
+  ui.event.classList.add('show');eventTimer=1.8;
+}
+function activeTeamCount(team){return cars.filter(c=>c.team===team&&!c.eliminated&&!c.falling).length;}
+function enemyCount(){return cars.filter(c=>(teamBattle?c.team===1:c.role==='ai')&&!c.eliminated&&!c.falling).length;}
+function updateHud(){
+  ui.rivals.textContent=enemyCount();
+  ui.teamCount.textContent=teamBattle?activeTeamCount(0):1;
+  const secs=Math.max(0,Math.ceil(roundLeft));ui.clock.textContent=`${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+  let pct=100;
+  if(player){
+    pct=Math.round(THREE.MathUtils.clamp(1-player.specialCooldown/player.spec.abilityCooldown,0,1)*100);
+    if(player.spec.ability==='turbo'&&player.turboTime>0){pct=Math.round(player.turboTime/player.spec.turboDuration*100);ui.boostPct.textContent=`AKTİF ${player.turboTime.toFixed(1)} SN`;}
+    else ui.boostPct.textContent=player.specialCooldown<=0?'HAZIR':`${player.specialCooldown.toFixed(1)} SN`;
+  }
+  ui.boost.style.width=`${pct}%`;ui.boost.classList.toggle('low',pct<25);
+  const speed=player&&!player.eliminated&&!player.falling?Math.hypot(player.vx,player.vz)*3.6:0;
+  document.getElementById('speedValue').textContent=String(Math.round(speed)).padStart(2,'0');
+}
+function endRound(won,reason,draw=false){
+  if(gameState!=='playing')return;gameState='result';abilityHeld=false;abilityPressed=false;
+  document.getElementById('resultIcon').textContent=draw?'=':won?'★':'↻';document.getElementById('resultTitle').textContent=draw?'BERABERE':won?'ARENA ŞAMPİYONU!':'ARENA DIŞINDA';
+  document.getElementById('resultCopy').textContent=reason;document.getElementById('resultKnockouts').textContent=knockouts;
+  const held=Math.max(0,ROUND_SECONDS-roundLeft),ss=Math.floor(held%60);document.getElementById('resultTime').textContent=`${String(Math.floor(held/60)).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  document.getElementById('resultOverlay').style.display='flex';ui.hud.classList.remove('visible');document.getElementById('touchControls').classList.remove('visible');playTone(won?880:170,.35,won?'triangle':'sawtooth',.06);
+}
+
+function readInput(){
+  const forward=(keys.w||keys.ArrowUp?1:0)-(keys.s||keys.ArrowDown?1:0);
+  const steer=(keys.a||keys.ArrowLeft?1:0)-(keys.d||keys.ArrowRight?1:0);
+  if(Math.abs(stickState.x)+Math.abs(stickState.y)>.12)return{throttle:-stickState.y,steer:-stickState.x,special:abilityPressed};
+  return{throttle:forward,steer,special:abilityPressed};
+}
+function aiInput(car,dt){
+  const targets=cars.filter(c=>c!==car&&!c.eliminated&&!c.falling&&(!teamBattle||c.team!==car.team));
+  car.decision-=dt;
+  if(!car.aiTarget||!targets.includes(car.aiTarget)||car.decision<=0){
+    const scored=targets.map(candidate=>{
+      let score=Math.hypot(candidate.x-car.x,candidate.z-car.z)+Math.random()*2.4;
+      if(!teamBattle&&candidate===player&&Math.random()<.55)score+=8;
+      if(teamBattle)score+=cars.filter(other=>other!==car&&other.team===car.team&&!other.eliminated&&other.aiTarget===candidate).length*7;
+      return{candidate,score};
+    }).sort((a,b)=>a.score-b.score);
+    car.aiTarget=scored[0]?.candidate??null;car.decision=2.2+Math.random()*2.1;
+    car.aiBehavior=Math.random()<.22?'patrol':'attack';
+    if(car.aiBehavior==='patrol'){
+      const angle=Math.atan2(car.x,car.z)+car.aiSide*(.8+Math.random()*1.1),radius=Math.min(activeArenaRadius*.52,7+Math.random()*6);
+      car.aiPatrol={x:Math.sin(angle)*radius,z:Math.cos(angle)*radius};
+    }
+  }
+  if(!car.aiTarget)return{throttle:0,steer:0,special:false};
+  const dx=car.aiTarget.x-car.x,dz=car.aiTarget.z-car.z,dist=Math.hypot(dx,dz)||1;
+  let tx=car.aiTarget.x,tz=car.aiTarget.z;
+  if(car.aiBehavior==='patrol'&&Math.hypot(car.aiPatrol.x-car.x,car.aiPatrol.z-car.z)>2.4){tx=car.aiPatrol.x;tz=car.aiPatrol.z;}
+  else{
+    const flank=car.aiSide*(dist>7?2.3:.8);tx+=-dz/dist*flank;tz+=dx/dist*flank;
+  }
+  if(Math.hypot(car.x,car.z)>activeArenaRadius-3){tx*=.55;tz*=.55;}
+  const desired=Math.atan2(tx-car.x,tz-car.z),diff=angleDelta(desired,car.yaw);
+  const throttle=Math.abs(diff)>1.35?.62:dist>4?1:.76;
+  const attacking=car.aiBehavior==='attack'&&Math.abs(diff)<.82;
+  const special=car.specialCooldown<=0&&attacking&&(car.spec.ability==='jump'?dist<3.6:car.spec.ability==='shockwave'?dist<6.5:car.spec.ability==='turbo'&&dist>5&&dist<11&&car.turboTime<=0);
+  return{throttle,steer:THREE.MathUtils.clamp(diff*1.5,-1,1),special};
+}
+function angleDelta(a,b){let d=a-b;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return d;}
+
+function activateAbility(car){
+  if(car.specialCooldown>0||car.falling||car.eliminated)return;
+  if(car.spec.ability==='jump'&&car.jumpHeight>.05)return;
+  car.specialCooldown=car.spec.abilityCooldown;
+  if(car.spec.ability==='jump'){
+    car.jumpVelocity=9.4;playTone(540,.12,'triangle',.05);emitSparks(car.x,.12,car.z,0x6be5ff,9,2.2);
+  }else if(car.spec.ability==='shockwave'){
+    const radius=7.2;
+    for(const target of cars){
+      if(target===car||target.eliminated||target.falling||(teamBattle&&target.team===car.team)||target.jumpHeight>1.55)continue;
+      const dx=target.x-car.x,dz=target.z-car.z,dist=Math.hypot(dx,dz);
+      if(dist>radius)continue;
+      const falloff=1-dist/radius,nx=dist>.01?dx/dist:Math.sin(car.yaw),nz=dist>.01?dz/dist:Math.cos(car.yaw),impulse=6.4*falloff;
+      target.vx+=nx*impulse/target.spec.mass;target.vz+=nz*impulse/target.spec.mass;target.angular+=THREE.MathUtils.clamp((nx*Math.cos(car.yaw)-nz*Math.sin(car.yaw))*.5,-.45,.45);target.decision=Math.min(target.decision,.25);
+      emitSparks(target.x,.55,target.z,0xffa45e,8,2.8);
+    }
+    const material=new THREE.MeshBasicMaterial({color:0xffa45e,transparent:true,opacity:.88,side:THREE.DoubleSide,depthWrite:false});
+    const mesh=new THREE.Mesh(new THREE.RingGeometry(.94,1,72),material);mesh.rotation.x=-Math.PI/2;mesh.position.set(car.x,.08,car.z);mesh.scale.set(.7,.7,1);scene.add(mesh);shockwaves.push({mesh,life:.42,maxLife:.42,radius});
+    if(car===player){playTone(105,.28,'sawtooth',.09);if(navigator.vibrate)navigator.vibrate(45);showEvent('ŞOK VURUŞU!','Yakındaki rakipleri savurdun','#ffb36f');}
+  }else if(car.spec.ability==='turbo'){
+    car.turboTime=car.spec.turboDuration;playTone(720,.18,'sawtooth',.055);emitSparks(car.x,.55,car.z,0xb48bff,12,3.2);
+    if(car===player)showEvent('TURBO!','2.5 saniye boyunca hızlanıyorsun','#c4a4ff');
+  }
+}
+
+function updateShockwaves(dt){
+  for(let i=shockwaves.length-1;i>=0;i--){const wave=shockwaves[i];wave.life-=dt;if(wave.life<=0){scene.remove(wave.mesh);wave.mesh.geometry.dispose();wave.mesh.material.dispose();shockwaves.splice(i,1);continue;}const progress=1-wave.life/wave.maxLife;wave.mesh.scale.set(.7+(wave.radius-.7)*progress,.7+(wave.radius-.7)*progress,1);wave.mesh.material.opacity=.88*(1-progress);}
+}
+
+function updateCar(car,input,dt){
+  if(car.eliminated)return;
+  if(car.falling){car.fallTime+=dt;car.mesh.position.y-=dt*(2.5+car.fallTime*4);car.mesh.rotation.z+=dt*1.7;car.mesh.rotation.x+=dt*.9;if(car.fallTime>1.05)eliminate(car);return;}
+  car.specialCooldown=Math.max(0,car.specialCooldown-dt);
+  car.turboTime=Math.max(0,car.turboTime-dt);
+  if(input.special&&car.specialCooldown<=0&&(car.spec.ability!=='turbo'||input.throttle>.12))activateAbility(car);
+  if(car.jumpHeight>0||car.jumpVelocity>0){car.jumpHeight+=car.jumpVelocity*dt;car.jumpVelocity-=22*dt;if(car.jumpHeight<=0){car.jumpHeight=0;car.jumpVelocity=0;}}
+  const forward=new THREE.Vector2(Math.sin(car.yaw),Math.cos(car.yaw));
+  const right=new THREE.Vector2(forward.y,-forward.x);
+  let vf=car.vx*forward.x+car.vz*forward.y,vl=car.vx*right.x+car.vz*right.y;
+  const boosting=car.spec.ability==='turbo'&&car.turboTime>0&&input.throttle>.12;
+  if(boosting)vf+=car.spec.accel*car.spec.turboMultiplier*input.throttle*dt;
+  else vf+=car.spec.accel*input.throttle*dt;
+  const turnFactor=THREE.MathUtils.clamp(Math.abs(vf)/3.2,.28,1.12)*(vf<-.3?-.7:1);
+  car.yaw+=input.steer*car.spec.turn*turnFactor*dt+car.angular*dt;
+  car.angular*=Math.exp(-3.8*dt);
+  const grip=Math.exp(-car.spec.grip*dt);vl*=grip;vf*=Math.exp(-.5*dt);
+  const cap=car.spec.maxSpeed*(boosting?1.16:1);vf=THREE.MathUtils.clamp(vf,-car.spec.maxSpeed*.48,cap);
+  const f2=new THREE.Vector2(Math.sin(car.yaw),Math.cos(car.yaw)),r2=new THREE.Vector2(f2.y,-f2.x);
+  car.vx=f2.x*vf+r2.x*vl;car.vz=f2.y*vf+r2.y*vl;
+  car.x+=car.vx*dt;car.z+=car.vz*dt;
+  const radial=Math.hypot(car.x,car.z),nx=car.x/(radial||1),nz=car.z/(radial||1);
+  const wheelOverhang=radial+CAR_RADIUS-activeArenaRadius,leanRatio=THREE.MathUtils.clamp(wheelOverhang/(CAR_RADIUS+ELIMINATION_MARGIN),0,1);
+  const edgeLean=Math.pow(leanRatio,1.25)*.46,outwardForward=nx*Math.sin(car.yaw)+nz*Math.cos(car.yaw),outwardSide=nx*Math.cos(car.yaw)-nz*Math.sin(car.yaw);
+  const edgePitch=outwardForward*edgeLean,edgeRoll=-outwardSide*edgeLean,skidRoll=-THREE.MathUtils.clamp(vl*.018,-.11,.11),settle=1-Math.exp(-dt*8);
+  car.mesh.position.set(car.x,-.07+car.jumpHeight,car.z);car.mesh.rotation.y=car.yaw;
+  car.mesh.rotation.x+=(edgePitch-car.mesh.rotation.x)*settle;car.mesh.rotation.z+=(edgeRoll+skidRoll-car.mesh.rotation.z)*settle;
+  for(const wheel of car.mesh.userData.wheels)wheel.rotation.x+=vf*dt/.43;
+  if(wheelOverhang>0&&radial>activeArenaRadius){
+    const outwardSpeed=car.vx*nx+car.vz*nz;
+    if(outwardSpeed>0){const curbResistance=.18+leanRatio*.22;car.vx-=nx*outwardSpeed*curbResistance*dt;car.vz-=nz*outwardSpeed*curbResistance*dt;}
+  }
+  if(car===player){ui.warning.classList.toggle('show',radial>activeArenaRadius-2.8);}
+  if(radial>activeArenaRadius+ELIMINATION_MARGIN){car.falling=true;car.fallTime=0;car.vx*=.5;car.vz*=.5;emitSparks(car.x,.45,car.z,0xff805c,18,6);playTone(125,.28,'sawtooth',.07);showEvent(car===player?'DIŞARI İTİLDİN!':'RAKİP DÜŞÜYOR',car===player?'Arenaya geri dönemedin':'Bir araç çizginin dışına çıktı',car===player?'#ff8069':'#ffe091');}
+}
+
+function resolveCarCollisions(){
+  for(let i=0;i<cars.length;i++)for(let j=i+1;j<cars.length;j++){
+    const a=cars[i],b=cars[j];if(a.eliminated||b.eliminated||a.falling||b.falling||Math.abs(a.jumpHeight-b.jumpHeight)>1.55)continue;
+    let dx=b.x-a.x,dz=b.z-a.z,dist=Math.hypot(dx,dz),min=CAR_RADIUS*2;
+    if(dist>=min)continue;if(dist<.001){dx=1;dz=0;dist=1;}
+    const nx=dx/dist,nz=dz/dist,invA=1/a.spec.mass,invB=1/b.spec.mass,invSum=invA+invB,sameTeam=teamBattle&&a.team===b.team;
+    const overlap=min-dist,correction=Math.max(0,overlap-.008)*.9;
+    const nextAX=a.x-nx*correction*invA/invSum,nextAZ=a.z-nz*correction*invA/invSum;
+    const nextBX=b.x+nx*correction*invB/invSum,nextBZ=b.z+nz*correction*invB/invSum;
+    const safeTeamSeparation=!sameTeam||(Math.hypot(nextAX,nextAZ)<activeArenaRadius+ELIMINATION_MARGIN&&Math.hypot(nextBX,nextBZ)<activeArenaRadius+ELIMINATION_MARGIN);
+    if(safeTeamSeparation){a.x=nextAX;b.x=nextBX;a.z=nextAZ;b.z=nextBZ;}
+    const rel=(b.vx-a.vx)*nx+(b.vz-a.vz)*nz;
+    if(rel<0&&!sameTeam){
+      const approachA=Math.max(0,a.vx*nx+a.vz*nz),approachB=Math.max(0,-b.vx*nx-b.vz*nz);
+      const totalApproach=approachA+approachB;
+      const ram=totalApproach>.01?(a.spec.ram*approachA+b.spec.ram*approachB)/totalApproach:1;
+      const impulse=-(1+.48)*rel/invSum*(.72+ram*.28)*1.04;
+      a.vx-=impulse*invA*nx;a.vz-=impulse*invA*nz;b.vx+=impulse*invB*nx;b.vz+=impulse*invB*nz;
+      a.decision=Math.min(a.decision,.45);b.decision=Math.min(b.decision,.45);
+      const tx=-nz,tz=nx,tangent=(b.vx-a.vx)*tx+(b.vz-a.vz)*tz,spin=THREE.MathUtils.clamp(tangent*.012,-.16,.16);
+      a.angular-=spin*invA/invSum;b.angular+=spin*invB/invSum;
+      const power=Math.abs(rel)*Math.min(a.spec.mass,b.spec.mass);
+      if(power>2.1){a.impactPower=Math.max(a.impactPower,power);b.impactPower=Math.max(b.impactPower,power);emitSparks((a.x+b.x)/2,.8,(a.z+b.z)/2,power>8?0xffb15e:0x73eaff,Math.min(20,Math.round(power*1.3)),Math.min(12,power));playTone(95+Math.min(180,power*13),.055,'triangle',Math.min(.075,.018+power*.003));if(navigator.vibrate)navigator.vibrate(Math.min(22,Math.round(power*1.3)));}
+    }
+    a.mesh.position.x=a.x;a.mesh.position.z=a.z;b.mesh.position.x=b.x;b.mesh.position.z=b.z;
+  }
+}
+
+const sparkGeometry=new THREE.BoxGeometry(.09,.09,.09),sparkMaterials=new Map();
+function emitSparks(x,y,z,color,count,power){
+  if(!sparkMaterials.has(color))sparkMaterials.set(color,new THREE.MeshBasicMaterial({color}));
+  const material=sparkMaterials.get(color);
+  for(let i=0;i<count;i++){const mesh=new THREE.Mesh(sparkGeometry,material);mesh.position.set(x,y,z);scene.add(mesh);sparks.push({mesh,vx:(Math.random()-.5)*power,vz:(Math.random()-.5)*power,vy:Math.random()*power*.45,life:.28+Math.random()*.42,max:.7});}
+}
+function updateSparks(dt){for(let i=sparks.length-1;i>=0;i--){const s=sparks[i];s.life-=dt;if(s.life<=0){scene.remove(s.mesh);sparks.splice(i,1);continue;}s.vy-=12*dt;s.mesh.position.x+=s.vx*dt;s.mesh.position.y=Math.max(.08,s.mesh.position.y+s.vy*dt);s.mesh.position.z+=s.vz*dt;s.mesh.scale.multiplyScalar(Math.max(.88,1-dt*1.6));}}
+function checkTeamOutcome(){
+  if(!teamBattle||gameState!=='playing')return;
+  if(activeTeamCount(0)===0)endRound(false,'Takımındaki tüm araçlar arenanın dışına çıktı.');
+  else if(activeTeamCount(1)===0)endRound(true,'Karşı takımdaki tüm araçları arenanın dışına ittiniz.');
+}
+function eliminate(car){
+  if(car.eliminated)return;car.eliminated=true;car.mesh.visible=false;
+  if(teamBattle){
+    if(car.team===1){knockouts++;showEvent('RAKİP ELENDİ',`${car.spec.name} arena dışına çıktı`,'#8ff2ff');playTone(620,.17,'sine',.055);}
+    else if(car===player){showEvent('ARAÇ ELENDİ','Takım arkadaşların savaşa devam ediyor.','#ffc875');document.getElementById('touchControls').classList.remove('visible');}
+    else showEvent('TAKIM ARKADAŞIN ELENDİ',`${car.spec.name} arena dışına çıktı`,'#ffc875');
+    checkTeamOutcome();
+  }else if(car===player)endRound(false,'Aracın platformun dışına çıktı. Bir sonraki turda çarpışma açını ve hızını ayarla.');
+  else{knockouts++;showEvent('RAKİP ELENDİ',`${car.spec.name} arena dışına çıktı`,'#8ff2ff');playTone(620,.17,'sine',.055);if(enemyCount()===0)endRound(true,'İki rakibi de platformun dışına ittirdin. Arenanın şampiyonusun!');}
+  updateHud();
+}
+
+function updateCamera(dt){
+  let target,look;
+  const focus=gameState==='playing'?(player&&!player.eliminated&&!player.falling?player:teamBattle?cars.find(c=>c.team===0&&!c.eliminated&&!c.falling):null):null;
+  if(focus){const back=new THREE.Vector3(-Math.sin(focus.yaw),0,-Math.cos(focus.yaw));const dist=window.innerHeight>window.innerWidth?18:15;target=new THREE.Vector3(focus.x,0,focus.z).addScaledVector(back,dist).add(new THREE.Vector3(0,window.innerHeight>window.innerWidth?12:9,0));look=new THREE.Vector3(focus.x,0,focus.z).add(new THREE.Vector3(0,1.3,0));}
+  else{const t=performance.now()*.00012;target=new THREE.Vector3(Math.sin(t)*3,19,26+Math.cos(t)*2);look=new THREE.Vector3(0,0,0);}
+  const blend=1-Math.exp(-dt*(gameState==='playing'?4.2:1.2));camera.position.lerp(target,blend);camera.lookAt(look);
+}
+
+function update(dt){
+  if(eventTimer>0){eventTimer-=dt;if(eventTimer<=0)ui.event.classList.remove('show');}
+  updateAudienceFlashes(dt);
+  if(gameState==='playing'){
+    elapsed+=dt;roundLeft=Math.max(0,roundLeft-dt);updateArenaShrink();
+    const input=readInput();
+    for(const car of cars){if(gameState!=='playing')break;if(car.eliminated)continue;updateCar(car,car===player?input:aiInput(car,dt),dt);}
+    abilityPressed=false;
+    if(gameState==='playing'){resolveCarCollisions();updateSparks(dt);updateShockwaves(dt);if(teamBattle)checkTeamOutcome();}
+    if(player&&!player.eliminated&&!player.falling&&Math.hypot(player.x,player.z)>activeArenaRadius-2.8)ui.warning.classList.add('show');
+    else if(player)ui.warning.classList.remove('show');
+    if(roundLeft<=0&&gameState==='playing'){
+      if(teamBattle){const own=activeTeamCount(0),enemy=activeTeamCount(1),draw=own===enemy,won=own>enemy;endRound(won,draw?'Süre bitti. İki takım da aynı sayıda araçla kaldı.':won?'Süre bitti; senin takımın arenada daha çok araçla kaldı.':'Süre bitti; karşı takım arenada daha çok araçla kaldı.',draw);}
+      else{const survivors=cars.filter(c=>!c.eliminated&&!c.falling);const won=player&&!player.eliminated&&survivors.length===1;endRound(won,won?'Süre doldu ve arenada tek araç olarak kaldın.':'Süre bitti. Bu turda rakiplerin senden daha uzun süre dayandı.');}
+    }
+    updateHud();
+  }else{updateSparks(dt*.45);updateShockwaves(dt*.45);}
+  updateCamera(dt);
+}
+
+let previous=0,accumulator=0;function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,previous?((now-previous)/1000):.016);previous=now;accumulator+=dt;const step=1/120;while(accumulator>=step){update(step);accumulator-=step;}renderer.render(scene,camera);}
+requestAnimationFrame(frame);
+
+function resize(){camera.aspect=window.innerWidth/window.innerHeight;camera.fov=window.innerHeight>window.innerWidth?65:54;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.65));renderer.setSize(window.innerWidth,window.innerHeight);}
+window.addEventListener('resize',resize);
+window.addEventListener('keydown',e=>{const key=e.key.length===1?e.key.toLowerCase():e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();if(key===' '&&!keys[key])abilityPressed=true;keys[key]=true;});
+window.addEventListener('keyup',e=>{const key=e.key.length===1?e.key.toLowerCase():e.key;keys[key]=false;if(key===' ')abilityHeld=false;});
+window.addEventListener('blur',()=>{for(const key in keys)keys[key]=false;abilityHeld=false;abilityPressed=false;});
+
+const stick=document.getElementById('stick'),thumb=document.getElementById('thumb'),boostButton=document.getElementById('boostButton');
+let stickPointer=null,stickState={x:0,y:0};
+function moveStick(e){const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,limit=r.width*.34,len=Math.hypot(dx,dy),k=len>limit?limit/len:1;stickState={x:dx*k/limit,y:dy*k/limit};thumb.style.transform=`translate(calc(-50% + ${dx*k}px),calc(-50% + ${dy*k}px))`;}
+stick.addEventListener('pointerdown',e=>{stickPointer=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e);});
+stick.addEventListener('pointermove',e=>{if(e.pointerId===stickPointer)moveStick(e);});
+function releaseStick(e){if(e.pointerId!==stickPointer)return;stickPointer=null;stickState={x:0,y:0};thumb.style.transform='translate(-50%,-50%)';}
+stick.addEventListener('pointerup',releaseStick);stick.addEventListener('pointercancel',releaseStick);
+boostButton.addEventListener('pointerdown',e=>{e.preventDefault();if(!abilityHeld)abilityPressed=true;abilityHeld=true;boostButton.setPointerCapture(e.pointerId);});boostButton.addEventListener('pointerup',()=>abilityHeld=false);boostButton.addEventListener('pointercancel',()=>abilityHeld=false);boostButton.addEventListener('lostpointercapture',()=>abilityHeld=false);
+
+selectVehicle(selectedType);
+</script>
+</body>
+</html>
